@@ -4,9 +4,13 @@ import { openSqliteEmporiumRepository } from "../../src/persistence/sqlite-empor
 
 export function createTestRepository(
   seedCatalog: readonly Duck[],
+  options: {
+    readonly generateDuckId?: () => string;
+  } = {},
 ): EmporiumRepository {
   return openSqliteEmporiumRepository({
     databasePath: ":memory:",
     seedCatalog,
+    ...options,
   });
 }

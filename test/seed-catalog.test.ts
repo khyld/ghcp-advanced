@@ -3,8 +3,8 @@ import { fileURLToPath } from "node:url";
 import request from "supertest";
 import { describe, expect, it } from "vitest";
 
-import { createApp } from "../src/app.js";
 import { loadCatalog } from "../src/catalog/catalog-loader.js";
+import { createTestApp as createApp } from "./helpers/test-app.js";
 import { createTestRepository } from "./helpers/test-repository.js";
 import { duckDetailPath } from "../src/views/catalog-page.js";
 import { stockLabel } from "../src/views/duck-detail-page.js";

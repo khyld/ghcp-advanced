@@ -22,6 +22,21 @@ export type CheckoutResult =
   | { readonly ok: true; readonly order: Order }
   | { readonly ok: false; readonly shortages: readonly StockShortage[] };
 
+export interface CreateDuckRequest {
+  readonly name: string;
+  readonly category: string;
+  readonly price: number;
+  readonly tagline: string;
+  readonly description: string;
+  readonly personalityTraits: readonly string[];
+  readonly specialPowers: readonly string[];
+  readonly stock: number;
+}
+
+export type CreateDuckResult =
+  | { readonly ok: true; readonly duck: Duck }
+  | { readonly ok: false; readonly reason: "duplicate-name" };
+
 export interface CatalogRepository {
   listDucks(): Duck[];
   findDuckById(id: string): Duck | undefined;
@@ -29,6 +44,7 @@ export interface CatalogRepository {
 }
 
 export interface EmporiumRepository extends CatalogRepository {
+  createDuck(request: CreateDuckRequest): CreateDuckResult;
   checkout(request: CheckoutRequest): CheckoutResult;
   findOrderById(id: string): Order | undefined;
 }

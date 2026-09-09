@@ -3,11 +3,14 @@ import { randomUUID } from "node:crypto";
 import Database from "better-sqlite3";
 
 import { priceToCents } from "../cart/cart-view.js";
+import { normalizeDuckName } from "../catalog/duck-name.js";
 import { parseCatalog, type Duck } from "../catalog/duck.js";
 import type { Order, OrderLine } from "../checkout/order.js";
 import {
   type CheckoutRequest,
   type CheckoutResult,
+  type CreateDuckRequest,
+  type CreateDuckResult,
   type EmporiumRepository,
   type StockShortage,
 } from "./emporium-repository.js";
@@ -48,6 +51,7 @@ export interface SqliteRepositoryOptions {
   readonly databasePath: string;
   readonly seedCatalog: readonly Duck[];
   readonly generateOrderId?: () => string;
+  readonly generateDuckId?: () => string;
   readonly now?: () => Date;
 }
 
@@ -92,14 +96,28 @@ function addSafeTotal(total: number, amount: number): number {
   return result;
 }
 
+function isNormalizedNameConstraint(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) {
+    return false;
+  }
+  const candidate = error as { code?: unknown; message?: unknown };
+  return (
+    candidate.code === "SQLITE_CONSTRAINT_UNIQUE" &&
+    typeof candidate.message === "string" &&
+    candidate.message.includes("ducks.normalized_name")
+  );
+}
+
 class SqliteEmporiumRepository implements EmporiumRepository {
   readonly #database: Database.Database;
   readonly #generateOrderId: () => string;
+  readonly #generateDuckId: () => string;
   readonly #now: () => Date;
 
   constructor(database: Database.Database, options: SqliteRepositoryOptions) {
     this.#database = database;
     this.#generateOrderId = options.generateOrderId ?? randomUUID;
+    this.#generateDuckId = options.generateDuckId ?? randomUUID;
     this.#now = options.now ?? (() => new Date());
   }
 
@@ -115,6 +133,73 @@ class SqliteEmporiumRepository implements EmporiumRepository {
       .prepare("SELECT * FROM ducks WHERE id = ?")
       .get(id) as DuckRow | undefined;
     return row === undefined ? undefined : duckFromRow(row);
+  }
+
+  createDuck(request: CreateDuckRequest): CreateDuckResult {
+    try {
+      return this.#database.transaction((): CreateDuckResult => {
+        const normalizedName = normalizeDuckName(request.name);
+        const duplicate = this.#database
+          .prepare("SELECT 1 FROM ducks WHERE normalized_name = ?")
+          .get(normalizedName);
+        if (duplicate !== undefined) {
+          return { ok: false, reason: "duplicate-name" };
+        }
+
+        const orderRow = this.#database
+          .prepare("SELECT COALESCE(MAX(catalog_order), -1) AS maximum FROM ducks")
+          .get() as { maximum: number };
+        const catalogOrder = orderRow.maximum + 1;
+        if (!Number.isSafeInteger(catalogOrder) || catalogOrder < 0) {
+          throw new RangeError("Catalog order exceeds the safe integer range");
+        }
+
+        const duck = parseCatalog([
+          {
+            id: this.#generateDuckId(),
+            name: request.name,
+            category: request.category,
+            price: request.price,
+            tagline: request.tagline,
+            description: request.description,
+            personalityTraits: [...request.personalityTraits],
+            specialPowers: [...request.specialPowers],
+            stock: request.stock,
+          },
+        ])[0]!;
+        this.#database
+          .prepare(`
+            INSERT INTO ducks (
+              id, name, normalized_name, category, price_cents, tagline,
+              description, personality_traits_json, special_powers_json,
+              stock, catalog_order
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `)
+          .run(
+            duck.id,
+            duck.name,
+            normalizedName,
+            duck.category,
+            priceToCents(duck.price),
+            duck.tagline,
+            duck.description,
+            JSON.stringify(duck.personalityTraits),
+            JSON.stringify(duck.specialPowers),
+            duck.stock,
+            catalogOrder,
+          );
+        const persisted = this.findDuckById(duck.id);
+        if (persisted === undefined) {
+          throw new Error("Created duck could not be read after insertion");
+        }
+        return { ok: true, duck: persisted };
+      }).immediate();
+    } catch (error) {
+      if (isNormalizedNameConstraint(error)) {
+        return { ok: false, reason: "duplicate-name" };
+      }
+      throw error;
+    }
   }
 
   checkout(request: CheckoutRequest): CheckoutResult {

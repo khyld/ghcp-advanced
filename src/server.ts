@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { createApp } from "./app.js";
+import { validateAdminPassword } from "./admin/admin-auth.js";
 import { loadCatalog } from "./catalog/catalog-loader.js";
 import { openSqliteEmporiumRepository } from "./persistence/sqlite-emporium-repository.js";
 
@@ -12,6 +13,7 @@ const defaultDatabasePath = fileURLToPath(
 );
 
 export interface ServerOptions {
+  adminPassword?: string;
   catalogPath?: string;
   databasePath?: string;
   port?: number;
@@ -30,13 +32,16 @@ function parsePort(value: string | undefined): number {
 }
 
 export async function startServer(options: ServerOptions = {}): Promise<Server> {
+  const adminPassword = validateAdminPassword(
+    options.adminPassword ?? process.env.ADMIN_PASSWORD,
+  );
   const catalogPath = options.catalogPath ?? process.env.CATALOG_PATH ?? defaultCatalogPath;
   const databasePath =
     options.databasePath ?? process.env.DATABASE_PATH ?? defaultDatabasePath;
   const port = options.port ?? parsePort(process.env.PORT);
   const seedCatalog = await loadCatalog(catalogPath);
   const repository = openSqliteEmporiumRepository({ databasePath, seedCatalog });
-  const app = createApp(repository);
+  const app = createApp(repository, { adminPassword });
 
   return await new Promise<Server>((resolveServer, reject) => {
     const server = app.listen(port);

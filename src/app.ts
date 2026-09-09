@@ -1,10 +1,13 @@
 import express, {
   type ErrorRequestHandler,
   type Express,
+  type RequestHandler,
   type Request,
   type Response,
 } from "express";
 
+import { createAdminAuthMiddleware } from "./admin/admin-auth.js";
+import { parseNewDuckInput } from "./admin/new-duck-input.js";
 import {
   addCartItem,
   removeCartItem,
@@ -32,7 +35,7 @@ import {
 import { parseCheckoutInput } from "./checkout/checkout-input.js";
 import type { EmporiumRepository } from "./persistence/emporium-repository.js";
 import { renderCartPage } from "./views/cart-page.js";
-import { renderCatalogPage } from "./views/catalog-page.js";
+import { duckDetailPath, renderCatalogPage } from "./views/catalog-page.js";
 import { renderCheckoutPage } from "./views/checkout-page.js";
 import {
   renderDuckDetailPage,
@@ -43,6 +46,9 @@ import { renderOrderConfirmationPage } from "./views/order-confirmation-page.js"
 
 export interface AppOptions {
   readonly sessionStore?: CartSessionStore;
+  readonly adminPassword: string;
+  readonly now?: () => Date;
+  readonly log?: (message: string) => void;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -71,12 +77,85 @@ function resultMessage<T>(result: ParseResult<T> | CartMutationResult): string |
 
 export function createApp(
   repository: EmporiumRepository,
-  options: AppOptions = {},
+  options: AppOptions,
 ): Express {
   const app = express();
   const sessionStore = options.sessionStore ?? new CartSessionStore();
+  const now = options.now ?? (() => new Date());
+  const log = options.log ?? console.log;
 
   app.use(express.urlencoded({ extended: false, limit: "4kb" }));
+
+  const requireJsonContentType: RequestHandler = (request, response, next) => {
+    if (!request.is("application/json")) {
+      response
+        .status(415)
+        .json({ error: "Content-Type must be application/json." });
+      return;
+    }
+    next();
+  };
+  const malformedAdminJsonHandler: ErrorRequestHandler = (
+    error,
+    _request,
+    response,
+    next,
+  ) => {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "type" in error &&
+      error.type === "entity.parse.failed"
+    ) {
+      response.status(400).json({ error: "Malformed JSON." });
+      return;
+    }
+    next(error);
+  };
+
+  app.post(
+    "/admin/ducks",
+    createAdminAuthMiddleware(options.adminPassword),
+    requireJsonContentType,
+    express.json({ limit: "16kb", strict: true }),
+    malformedAdminJsonHandler,
+    (request: Request, response: Response) => {
+      const input = parseNewDuckInput(request.body);
+      if (!input.ok) {
+        response
+          .status(400)
+          .json({ error: "Validation failed", fields: input.errors });
+        return;
+      }
+
+      const auditTimestamp = now().toISOString();
+      const result = repository.createDuck({
+        name: input.value.name,
+        category: input.value.category,
+        price: input.value.price,
+        tagline: input.value.tagline,
+        description: input.value.description,
+        personalityTraits: input.value.personalityTraits,
+        specialPowers: input.value.specialPowers,
+        stock: input.value.initialStock,
+      });
+      if (!result.ok) {
+        response.status(409).json({
+          error: "A duck with that name already exists.",
+          fields: { name: "Choose a unique duck name." },
+        });
+        return;
+      }
+
+      log(
+        `${auditTimestamp} curator added duck ${JSON.stringify(result.duck.name)}`,
+      );
+      response
+        .status(201)
+        .location(duckDetailPath(result.duck.id))
+        .json(result.duck);
+    },
+  );
 
   app.get("/", (request, response) => {
     const catalog = repository.listDucks();
@@ -255,17 +334,18 @@ export function createApp(
       "Unexpected application error:",
       error instanceof Error ? error.message : "Unknown error",
     );
-    response
-      .status(500)
-      .type("html")
-      .send(
-        renderPage(
-          "Something went wrong",
-          `<h1>Something went wrong</h1>
+    if (_request.path === "/admin/ducks") {
+      response.status(500).json({ error: "Unable to complete the request." });
+      return;
+    }
+    response.status(500).type("html").send(
+      renderPage(
+        "Something went wrong",
+        `<h1>Something went wrong</h1>
       <p>We could not complete your request. Please try again.</p>
       <p><a href="/cart">Return to your cart</a></p>`,
-        ),
-      );
+      ),
+    );
   };
   app.use(unexpectedErrorHandler);
 

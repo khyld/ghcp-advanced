@@ -1,9 +1,12 @@
 import request from "supertest";
 import { describe, expect, it } from "vitest";
 
-import { createApp } from "../src/app.js";
 import { CartSessionStore } from "../src/cart/cart-session-store.js";
 import { duckFixture } from "./fixtures/ducks.js";
+import {
+  createTestApp as createApp,
+  TEST_ADMIN_PASSWORD,
+} from "./helpers/test-app.js";
 import { createTestRepository } from "./helpers/test-repository.js";
 
 const ducks = [
@@ -545,5 +548,155 @@ describe("checkout routes", () => {
     } finally {
       console.error = originalConsoleError;
     }
+  });
+});
+
+describe("POST /admin/ducks", () => {
+  const validNewDuck = {
+    name: " Doctor Drake ",
+    category: " Professions ",
+    price: 12.5,
+    tagline: " Diagnoses difficult bugs. ",
+    description: " A careful and thoughtful duck. ",
+    personalityTraits: [" Patient ", " Precise "],
+    specialPowers: [" Debug vision "],
+    initialStock: 2,
+  };
+
+  it("authenticates before parsing and returns identical unauthorized responses", async () => {
+    const app = createApp(createTestRepository(ducks));
+
+    const missing = await request(app)
+      .post("/admin/ducks")
+      .set("Content-Type", "application/json")
+      .send("{")
+      .expect(401);
+    const wrong = await request(app)
+      .post("/admin/ducks")
+      .set("Authorization", "Bearer wrong-password")
+      .send(validNewDuck)
+      .expect(401);
+
+    expect(missing.body).toEqual({ error: "Unauthorized" });
+    expect(wrong.body).toEqual(missing.body);
+    expect(missing.headers["www-authenticate"]).toBe("Bearer");
+    expect(wrong.headers["www-authenticate"]).toBe("Bearer");
+  });
+
+  it("returns safe JSON errors for media type, malformed JSON, and invalid fields", async () => {
+    const app = createApp(createTestRepository(ducks));
+    const authorization = `Bearer ${TEST_ADMIN_PASSWORD}`;
+
+    expect(
+      (
+        await request(app)
+          .post("/admin/ducks")
+          .set("Authorization", authorization)
+          .type("form")
+          .send({ name: "Form Duck" })
+          .expect(415)
+      ).body,
+    ).toEqual({ error: "Content-Type must be application/json." });
+
+    expect(
+      (
+        await request(app)
+          .post("/admin/ducks")
+          .set("Authorization", authorization)
+          .set("Content-Type", "application/json")
+          .send("{")
+          .expect(400)
+      ).body,
+    ).toEqual({ error: "Malformed JSON." });
+
+    const invalid = await request(app)
+      .post("/admin/ducks")
+      .set("Authorization", authorization)
+      .send({ name: "Incomplete Duck" })
+      .expect(400);
+    expect(invalid.body.error).toBe("Validation failed");
+    expect(invalid.body.fields).toHaveProperty("category");
+    expect(invalid.body.fields).toHaveProperty("price");
+  });
+
+  it("creates, logs, and immediately exposes a normalized persistent duck", async () => {
+    const logs: string[] = [];
+    const repository = createTestRepository(ducks, {
+      generateDuckId: () => "123e4567-e89b-42d3-a456-426614174099",
+    });
+    const agent = request.agent(
+      createApp(repository, {
+        now: () => new Date("2026-09-09T19:30:00.000Z"),
+        log: (message) => logs.push(message),
+      }),
+    );
+
+    const response = await agent
+      .post("/admin/ducks")
+      .set("Authorization", `Bearer ${TEST_ADMIN_PASSWORD}`)
+      .send(validNewDuck)
+      .expect(201);
+
+    expect(response.headers.location).toBe(
+      "/ducks/123e4567-e89b-42d3-a456-426614174099",
+    );
+    expect(response.body).toEqual({
+      id: "123e4567-e89b-42d3-a456-426614174099",
+      name: "Doctor Drake",
+      category: "Professions",
+      price: 12.5,
+      tagline: "Diagnoses difficult bugs.",
+      description: "A careful and thoughtful duck.",
+      personalityTraits: ["Patient", "Precise"],
+      specialPowers: ["Debug vision"],
+      stock: 2,
+    });
+    expect(logs).toEqual([
+      '2026-09-09T19:30:00.000Z curator added duck "Doctor Drake"',
+    ]);
+    expect(logs.join(" ")).not.toContain(TEST_ADMIN_PASSWORD);
+
+    expect(
+      (await agent.get("/").query({ q: "thoughtful duck" }).expect(200)).text,
+    ).toContain("Doctor Drake");
+    expect(
+      (
+        await agent
+          .get("/ducks/123e4567-e89b-42d3-a456-426614174099")
+          .expect(200)
+      ).text,
+    ).toContain("Debug vision");
+    await agent
+      .post("/cart/items")
+      .type("form")
+      .send({ duckId: "123e4567-e89b-42d3-a456-426614174099" })
+      .expect(303);
+    expect((await agent.get("/cart").expect(200)).text).toContain("Doctor Drake");
+
+    const duplicate = await agent
+      .post("/admin/ducks")
+      .set("Authorization", `Bearer ${TEST_ADMIN_PASSWORD}`)
+      .send({ ...validNewDuck, name: "doctor drake" })
+      .expect(409);
+    expect(duplicate.body).toEqual({
+      error: "A duck with that name already exists.",
+      fields: { name: "Choose a unique duck name." },
+    });
+    expect(logs).toHaveLength(1);
+  });
+
+  it("rejects persistence-controlled fields without mutating the catalog", async () => {
+    const repository = createTestRepository(ducks);
+    const initialCount = repository.listDucks().length;
+    const response = await request(createApp(repository))
+      .post("/admin/ducks")
+      .set("Authorization", `Bearer ${TEST_ADMIN_PASSWORD}`)
+      .send({ ...validNewDuck, id: "client-controlled", stock: 99 })
+      .expect(400);
+
+    expect(response.body.fields).toEqual({
+      body: "Request body contains unexpected fields.",
+    });
+    expect(repository.listDucks()).toHaveLength(initialCount);
   });
 });
