@@ -4,11 +4,16 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { createApp } from "./app.js";
 import { loadCatalog } from "./catalog/catalog-loader.js";
+import { openSqliteEmporiumRepository } from "./persistence/sqlite-emporium-repository.js";
 
 const defaultCatalogPath = fileURLToPath(new URL("../data/ducks.json", import.meta.url));
+const defaultDatabasePath = fileURLToPath(
+  new URL("../data/emporium.sqlite", import.meta.url),
+);
 
 export interface ServerOptions {
   catalogPath?: string;
+  databasePath?: string;
   port?: number;
 }
 
@@ -26,17 +31,31 @@ function parsePort(value: string | undefined): number {
 
 export async function startServer(options: ServerOptions = {}): Promise<Server> {
   const catalogPath = options.catalogPath ?? process.env.CATALOG_PATH ?? defaultCatalogPath;
+  const databasePath =
+    options.databasePath ?? process.env.DATABASE_PATH ?? defaultDatabasePath;
   const port = options.port ?? parsePort(process.env.PORT);
-  const ducks = await loadCatalog(catalogPath);
-  const app = createApp(ducks);
+  const seedCatalog = await loadCatalog(catalogPath);
+  const repository = openSqliteEmporiumRepository({ databasePath, seedCatalog });
+  const app = createApp(repository);
 
   return await new Promise<Server>((resolveServer, reject) => {
     const server = app.listen(port);
+    let repositoryClosed = false;
+    const closeRepository = (): void => {
+      if (!repositoryClosed) {
+        repositoryClosed = true;
+        repository.close();
+      }
+    };
 
     server.once("listening", () => {
       resolveServer(server);
     });
-    server.once("error", reject);
+    server.once("close", closeRepository);
+    server.once("error", (error) => {
+      closeRepository();
+      reject(error);
+    });
   });
 }
 

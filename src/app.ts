@@ -1,4 +1,9 @@
-import express, { type Express, type Request, type Response } from "express";
+import express, {
+  type ErrorRequestHandler,
+  type Express,
+  type Request,
+  type Response,
+} from "express";
 
 import {
   addCartItem,
@@ -18,13 +23,17 @@ import {
 } from "./cart/cart-session-store.js";
 import { buildCartView } from "./cart/cart-view.js";
 import { readSessionId, setSessionCookie } from "./cart/session-cookie.js";
-import type { Duck } from "./catalog/duck.js";
+import { parseCheckoutInput } from "./checkout/checkout-input.js";
+import type { EmporiumRepository } from "./persistence/emporium-repository.js";
 import { renderCartPage } from "./views/cart-page.js";
 import { renderCatalogPage } from "./views/catalog-page.js";
+import { renderCheckoutPage } from "./views/checkout-page.js";
 import {
   renderDuckDetailPage,
   renderDuckNotFoundPage,
 } from "./views/duck-detail-page.js";
+import { renderPage } from "./views/html.js";
+import { renderOrderConfirmationPage } from "./views/order-confirmation-page.js";
 
 export interface AppOptions {
   readonly sessionStore?: CartSessionStore;
@@ -54,19 +63,22 @@ function resultMessage<T>(result: ParseResult<T> | CartMutationResult): string |
   return result.ok ? undefined : result.message;
 }
 
-export function createApp(ducks: readonly Duck[], options: AppOptions = {}): Express {
+export function createApp(
+  repository: EmporiumRepository,
+  options: AppOptions = {},
+): Express {
   const app = express();
   const sessionStore = options.sessionStore ?? new CartSessionStore();
 
   app.use(express.urlencoded({ extended: false, limit: "4kb" }));
 
   app.get("/", (_request, response) => {
-    response.status(200).type("html").send(renderCatalogPage(ducks));
+    response.status(200).type("html").send(renderCatalogPage(repository.listDucks()));
   });
 
   app.get("/ducks/:id", (request, response) => {
     const id = request.params.id;
-    const duck = typeof id === "string" ? ducks.find((item) => item.id === id) : undefined;
+    const duck = typeof id === "string" ? repository.findDuckById(id) : undefined;
 
     if (duck === undefined) {
       response.status(404).type("html").send(renderDuckNotFoundPage());
@@ -78,7 +90,7 @@ export function createApp(ducks: readonly Duck[], options: AppOptions = {}): Exp
 
   app.get("/cart", (request, response) => {
     const session = accessCartSession(request, response, sessionStore);
-    const cart = buildCartView(session.cart, ducks);
+    const cart = buildCartView(session.cart, repository.listDucks());
     const message = sessionStore.takeFlash(session);
     response.status(200).type("html").send(renderCartPage(cart, message));
   });
@@ -90,7 +102,7 @@ export function createApp(ducks: readonly Duck[], options: AppOptions = {}): Exp
     let message = resultMessage(idResult) ?? resultMessage(quantityResult);
 
     if (message === undefined && idResult.ok && quantityResult.ok) {
-      const duck = ducks.find((item) => item.id === idResult.value);
+      const duck = repository.findDuckById(idResult.value);
       if (duck === undefined) {
         message = "Choose a valid duck.";
       } else {
@@ -124,7 +136,7 @@ export function createApp(ducks: readonly Duck[], options: AppOptions = {}): Exp
     let message = resultMessage(idResult) ?? resultMessage(quantityResult);
 
     if (message === undefined && idResult.ok && quantityResult.ok) {
-      const duck = ducks.find((item) => item.id === idResult.value);
+      const duck = repository.findDuckById(idResult.value);
       if (duck === undefined) {
         message = "Choose a valid duck.";
       } else {
@@ -139,6 +151,87 @@ export function createApp(ducks: readonly Duck[], options: AppOptions = {}): Exp
     }
     response.redirect(303, "/cart");
   });
+
+  app.get("/checkout", (request, response) => {
+    const session = accessCartSession(request, response, sessionStore);
+    if (session.cart.items.size === 0) {
+      sessionStore.setFlash(session, "Your cart is empty. Add a duck before checking out.");
+      response.redirect(303, "/cart");
+      return;
+    }
+
+    const cart = buildCartView(session.cart, repository.listDucks());
+    response.status(200).type("html").send(renderCheckoutPage(cart));
+  });
+
+  app.post("/checkout", (request, response) => {
+    const session = accessCartSession(request, response, sessionStore);
+    if (session.cart.items.size === 0) {
+      sessionStore.setFlash(session, "Your cart is empty. Add a duck before checking out.");
+      response.redirect(303, "/cart");
+      return;
+    }
+
+    const cart = buildCartView(session.cart, repository.listDucks());
+    const input = parseCheckoutInput(request.body);
+    if (!input.ok) {
+      response
+        .status(400)
+        .type("html")
+        .send(
+          renderCheckoutPage(cart, {
+            values: input.values,
+            errors: input.errors,
+          }),
+        );
+      return;
+    }
+
+    const result = repository.checkout({
+      shipping: input.shipping,
+      lines: Array.from(session.cart.items, ([duckId, quantity]) => ({
+        duckId,
+        quantity,
+      })),
+    });
+    if (!result.ok) {
+      const currentCart = buildCartView(session.cart, repository.listDucks());
+      response
+        .status(400)
+        .type("html")
+        .send(renderCheckoutPage(currentCart, { stockErrors: result.shortages }));
+      return;
+    }
+
+    session.cart.items.clear();
+    response
+      .status(200)
+      .type("html")
+      .send(renderOrderConfirmationPage(result.order));
+  });
+
+  const unexpectedErrorHandler: ErrorRequestHandler = (error, _request, response, next) => {
+    if (response.headersSent) {
+      next(error);
+      return;
+    }
+    console.error(
+      "Unexpected application error:",
+      error instanceof Error ? error.message : "Unknown error",
+    );
+    response
+      .status(500)
+      .type("html")
+      .send(
+        renderPage(
+          "Something went wrong",
+          `<h1>Something went wrong</h1>
+      <p>We could not complete your request. Please try again.</p>
+      <p><a href="/cart">Return to your cart</a></p>`,
+        ),
+      );
+  };
+  app.use(unexpectedErrorHandler);
 
   return app;
 }

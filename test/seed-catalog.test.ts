@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { createApp } from "../src/app.js";
 import { loadCatalog } from "../src/catalog/catalog-loader.js";
+import { createTestRepository } from "./helpers/test-repository.js";
 import { duckDetailPath } from "../src/views/catalog-page.js";
 import { stockLabel } from "../src/views/duck-detail-page.js";
 
@@ -27,7 +28,7 @@ describe("seed catalog", () => {
 
   it("serves a complete detail page for every seeded catalog link", async () => {
     const ducks = await loadCatalog(seedCatalogPath);
-    const app = createApp(ducks);
+    const app = createApp(createTestRepository(ducks));
 
     for (const duck of ducks) {
       const response = await request(app).get(duckDetailPath(duck.id)).expect(200);

@@ -1,5 +1,6 @@
-import { join } from "node:path";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
@@ -28,7 +29,9 @@ describe("startServer", () => {
   });
 
   it("starts with the seed catalog on an ephemeral port", async () => {
-    const server = await startServer({ port: 0 });
+    const directory = await mkdtemp(join(tmpdir(), "duck-server-"));
+    const databasePath = join(directory, "emporium.sqlite");
+    const server = await startServer({ databasePath, port: 0 });
 
     try {
       const address = server.address();
@@ -38,6 +41,7 @@ describe("startServer", () => {
       );
     } finally {
       await closeServer(server);
+      await rm(directory, { recursive: true, force: true });
     }
   });
 });

@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
 import { CartSessionStore } from "../src/cart/cart-session-store.js";
 import { duckFixture } from "./fixtures/ducks.js";
+import { createTestRepository } from "./helpers/test-repository.js";
 
 const ducks = [
   duckFixture({
@@ -34,7 +35,9 @@ const ducks = [
 
 describe("GET /", () => {
   it("returns the complete linked HTML catalog in order", async () => {
-    const response = await request(createApp(ducks)).get("/").expect(200);
+    const response = await request(createApp(createTestRepository(ducks)))
+      .get("/")
+      .expect(200);
 
     expect(response.headers["content-type"]).toMatch(/^text\/html; charset=utf-8$/u);
     expect(response.text).toContain("First Duck");
@@ -48,7 +51,7 @@ describe("GET /", () => {
   });
 
   it("returns the empty state without a list or detail links", async () => {
-    const response = await request(createApp([])).get("/").expect(200);
+    const response = await request(createApp(createTestRepository([]))).get("/").expect(200);
 
     expect(response.text).toContain("No ducks are currently available.");
     expect(response.text).not.toContain("<ul>");
@@ -58,7 +61,9 @@ describe("GET /", () => {
 
 describe("GET /ducks/:id", () => {
   it("returns complete details for an exact ID", async () => {
-    const response = await request(createApp(ducks)).get("/ducks/first").expect(200);
+    const response = await request(createApp(createTestRepository(ducks)))
+      .get("/ducks/first")
+      .expect(200);
 
     expect(response.headers["content-type"]).toMatch(/^text\/html; charset=utf-8$/u);
     for (const content of [
@@ -77,7 +82,7 @@ describe("GET /ducks/:id", () => {
   });
 
   it("resolves a URL-encoded exact ID", async () => {
-    const response = await request(createApp(ducks))
+    const response = await request(createApp(createTestRepository(ducks)))
       .get("/ducks/duck%2Fwith%20space")
       .expect(200);
 
@@ -87,7 +92,7 @@ describe("GET /ducks/:id", () => {
   it.each(["missing-duck", "fir", "FIRST"])(
     "returns a friendly 404 for unmatched ID %s",
     async (id) => {
-      const response = await request(createApp(ducks))
+      const response = await request(createApp(createTestRepository(ducks)))
         .get(`/ducks/${id}`)
         .expect(404);
 
@@ -101,7 +106,7 @@ describe("GET /ducks/:id", () => {
 
 describe("cart routes", () => {
   it("supports add, repeated add, update, zero-removal, and explicit removal", async () => {
-    const agent = request.agent(createApp(ducks));
+    const agent = request.agent(createApp(createTestRepository(ducks)));
 
     await agent.post("/cart/items").type("form").send({ duckId: "first" }).expect(303);
     await agent
@@ -143,7 +148,7 @@ describe("cart routes", () => {
   });
 
   it("rejects over-stock and sold-out adds atomically with one-time messages", async () => {
-    const agent = request.agent(createApp(ducks));
+    const agent = request.agent(createApp(createTestRepository(ducks)));
     await agent.post("/cart/items").type("form").send({ duckId: "first" }).expect(303);
 
     await agent
@@ -175,7 +180,7 @@ describe("cart routes", () => {
   });
 
   it("rejects invalid and unknown input without trusting submitted display data", async () => {
-    const agent = request.agent(createApp(ducks));
+    const agent = request.agent(createApp(createTestRepository(ducks)));
 
     await agent
       .post("/cart/items")
@@ -215,7 +220,7 @@ describe("cart routes", () => {
   });
 
   it("keeps carts isolated between agents", async () => {
-    const app = createApp(ducks);
+    const app = createApp(createTestRepository(ducks));
     const firstAgent = request.agent(app);
     const secondAgent = request.agent(app);
 
@@ -242,7 +247,9 @@ describe("cart routes", () => {
       generateId: () => ids.shift() ?? "123e4567-e89b-42d3-a456-426614174002",
       inactivityMs: 100,
     });
-    const agent = request.agent(createApp(ducks, { sessionStore: store }));
+    const agent = request.agent(
+      createApp(createTestRepository(ducks), { sessionStore: store }),
+    );
 
     await agent.get("/cart").expect(200);
     await agent.post("/cart/items").type("form").send({ duckId: "first" }).expect(303);
@@ -261,7 +268,9 @@ describe("cart routes", () => {
   });
 
   it("sets a non-persistent secure-by-context session cookie", async () => {
-    const response = await request(createApp(ducks)).get("/cart").expect(200);
+    const response = await request(createApp(createTestRepository(ducks)))
+      .get("/cart")
+      .expect(200);
     const cookie = response.headers["set-cookie"]?.[0] ?? "";
 
     expect(cookie).toContain("duck_cart_session=");
@@ -270,5 +279,193 @@ describe("cart routes", () => {
     expect(cookie).toContain("SameSite=Lax");
     expect(cookie).not.toContain("Secure");
     expect(cookie).not.toMatch(/Expires=|Max-Age=/iu);
+  });
+});
+
+describe("checkout routes", () => {
+  it("redirects empty checkout attempts and shows the message once", async () => {
+    const agent = request.agent(createApp(createTestRepository(ducks)));
+
+    await agent.get("/checkout").expect(303).expect("Location", "/cart");
+    let response = await agent.get("/cart").expect(200);
+    expect(response.text).toContain("Your cart is empty. Add a duck before checking out.");
+
+    response = await agent.get("/cart").expect(200);
+    expect(response.text).not.toContain(
+      "Your cart is empty. Add a duck before checking out.",
+    );
+
+    await agent.post("/checkout").type("form").send({ cardNumber: "secret" }).expect(303);
+  });
+
+  it("renders checkout only for a non-empty cart", async () => {
+    const agent = request.agent(createApp(createTestRepository(ducks)));
+    await agent.post("/cart/items").type("form").send({ duckId: "first" }).expect(303);
+
+    const cart = await agent.get("/cart").expect(200);
+    expect(cart.text).toContain('href="/checkout"');
+
+    const checkout = await agent.get("/checkout").expect(200);
+    expect(checkout.text).toContain('form method="post" action="/checkout"');
+    expect(checkout.text).toContain("First Duck");
+    expect(checkout.text).toContain("€12.99");
+    expect(checkout.text).not.toContain('name="total"');
+  });
+
+  it("returns every validation error without echoing payment data or clearing cart", async () => {
+    const agent = request.agent(createApp(createTestRepository(ducks)));
+    await agent.post("/cart/items").type("form").send({ duckId: "first" }).expect(303);
+
+    const response = await agent
+      .post("/checkout")
+      .type("form")
+      .send({
+        shippingName: "Quincy",
+        email: "invalid",
+        shippingAddress: "1 Pond Lane",
+        cardNumber: "4111-secret",
+        expiry: " ",
+        securityCode: "999-secret",
+      })
+      .expect(400);
+
+    expect(response.text).toContain("Enter a valid email address.");
+    expect(response.text).toContain("Enter a mocked expiry.");
+    expect(response.text).not.toContain("4111-secret");
+    expect(response.text).not.toContain("999-secret");
+    expect((await agent.get("/cart").expect(200)).text).toContain("First Duck");
+  });
+
+  it("commits trusted order data, decrements stock, and clears only that session cart", async () => {
+    const repository = createTestRepository(ducks);
+    const app = createApp(repository);
+    const customer = request.agent(app);
+    const otherCustomer = request.agent(app);
+
+    await customer
+      .post("/cart/items")
+      .type("form")
+      .send({
+        duckId: "first",
+        quantity: "2",
+        name: "Forged Duck",
+        price: "0.01",
+        total: "0.02",
+      })
+      .expect(303);
+    await otherCustomer
+      .post("/cart/items")
+      .type("form")
+      .send({ duckId: "second" })
+      .expect(303);
+
+    const response = await customer
+      .post("/checkout")
+      .type("form")
+      .send({
+        shippingName: " Quincy ",
+        email: "Quincy@EXAMPLE.COM",
+        shippingAddress: " 1 Pond Lane ",
+        cardNumber: "mock-card-secret",
+        expiry: "never",
+        securityCode: "hidden",
+        duckId: "second",
+        price: "0.01",
+        total: "0.01",
+      })
+      .expect(200);
+
+    expect(response.text).toContain("Your order is confirmed!");
+    expect(response.text).toContain("First Duck");
+    expect(response.text).toContain("€25.98");
+    expect(response.text).toContain("Quincy");
+    expect(response.text).not.toContain("Forged Duck");
+    expect(response.text).not.toContain("mock-card-secret");
+    expect(response.text).not.toContain("hidden");
+    expect(repository.findDuckById("first")?.stock).toBe(1);
+    expect((await customer.get("/cart").expect(200)).text).toContain(
+      "Your cart is empty.",
+    );
+    expect((await otherCustomer.get("/cart").expect(200)).text).toContain(
+      "Second Duck",
+    );
+  });
+
+  it("reports current stock shortages and retains the cart", async () => {
+    const repository = createTestRepository(ducks);
+    const agent = request.agent(createApp(repository));
+    await agent
+      .post("/cart/items")
+      .type("form")
+      .send({ duckId: "first", quantity: "2" })
+      .expect(303);
+
+    const competingOrder = repository.checkout({
+      shipping: {
+        name: "Other Customer",
+        email: "other@example.com",
+        address: "2 Pond Lane",
+      },
+      lines: [{ duckId: "first", quantity: 2 }],
+    });
+    expect(competingOrder.ok).toBe(true);
+
+    const response = await agent
+      .post("/checkout")
+      .type("form")
+      .send({
+        shippingName: "Quincy",
+        email: "quincy@example.com",
+        shippingAddress: "1 Pond Lane",
+        cardNumber: "mock",
+        expiry: "mock",
+        securityCode: "mock",
+      })
+      .expect(400);
+
+    expect(response.text).toContain("First Duck has 1 available; you requested 2.");
+    expect((await agent.get("/cart").expect(200)).text).toContain(
+      "<strong>Quantity:</strong> 2",
+    );
+  });
+
+  it("returns a generic error and retains the cart when persistence throws", async () => {
+    const repository = createTestRepository(ducks);
+    const app = createApp({
+      ...repository,
+      listDucks: () => repository.listDucks(),
+      findDuckById: (id) => repository.findDuckById(id),
+      findOrderById: (id) => repository.findOrderById(id),
+      close: () => repository.close(),
+      checkout: () => {
+        throw new Error("sensitive database detail");
+      },
+    });
+    const agent = request.agent(app);
+    const originalConsoleError = console.error;
+    console.error = () => undefined;
+
+    try {
+      await agent.post("/cart/items").type("form").send({ duckId: "first" }).expect(303);
+      const response = await agent
+        .post("/checkout")
+        .type("form")
+        .send({
+          shippingName: "Quincy",
+          email: "quincy@example.com",
+          shippingAddress: "1 Pond Lane",
+          cardNumber: "card-secret",
+          expiry: "expiry-secret",
+          securityCode: "code-secret",
+        })
+        .expect(500);
+
+      expect(response.text).toContain("We could not complete your request.");
+      expect(response.text).not.toContain("sensitive database detail");
+      expect(response.text).not.toContain("card-secret");
+      expect((await agent.get("/cart").expect(200)).text).toContain("First Duck");
+    } finally {
+      console.error = originalConsoleError;
+    }
   });
 });

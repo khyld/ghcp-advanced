@@ -5,5 +5,9 @@ node_modules/
 .github/.vscode
 .github/agents
 specs/
+data/*.sqlite
+data/*.sqlite-journal
+data/*.sqlite-wal
+data/*.sqlite-shm
 
 .DS_Store

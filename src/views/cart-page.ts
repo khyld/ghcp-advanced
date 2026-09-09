@@ -38,7 +38,8 @@ export function renderCartPage(cart: CartView, message?: string): string {
       : `<ul>
       ${cart.lines.map(renderLine).join("\n      ")}
     </ul>
-    <p><strong>Cart total:</strong> ${formatCents(cart.totalCents)}</p>`;
+    <p><strong>Cart total:</strong> ${formatCents(cart.totalCents)}</p>
+    <p><a href="/checkout">Continue to checkout</a></p>`;
 
   return renderPage(
     "Your cart",
