@@ -83,6 +83,10 @@ describe("renderCatalogPage", () => {
     expect(html).not.toMatch(/<(?:img|form|button|select|input)\b/iu);
   });
 
+  it("links to the cart", () => {
+    expect(renderCatalogPage([firstDuck])).toContain('href="/cart"');
+  });
+
   it("URL-encodes and HTML-escapes detail links", () => {
     const id = "captain's duck/one & two";
     const html = renderCatalogPage([duckFixture({ id })]);

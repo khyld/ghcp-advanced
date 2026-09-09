@@ -1,13 +1,13 @@
 import type { Duck } from "../catalog/duck.js";
 
+import { formatCents, priceToCents } from "../cart/cart-view.js";
 import { escapeHtml, renderPage } from "./html.js";
 
 export function formatPrice(price: number): string {
   if (!Number.isFinite(price)) {
     throw new TypeError("Price must be a finite number");
   }
-
-  return `€${price.toFixed(2)}`;
+  return formatCents(priceToCents(price));
 }
 
 export function duckDetailPath(id: string): string {
@@ -35,7 +35,8 @@ export function renderCatalogPage(ducks: readonly Duck[]): string {
 
   return renderPage(
     "The Rubber Duck Emporium",
-    `<h1>The Rubber Duck Emporium</h1>
+    `<p><a href="/cart">View cart</a></p>
+      <h1>The Rubber Duck Emporium</h1>
       ${catalogContent}`,
   );
 }

@@ -46,12 +46,27 @@ describe("renderDuckDetailPage", () => {
       "Personality traits",
       "Special powers",
       'href="/"',
+      'href="/cart"',
     ]) {
       expect(html).toContain(content);
     }
     expect(html.indexOf("First trait")).toBeLessThan(html.indexOf("Second trait"));
     expect(html.indexOf("First power")).toBeLessThan(html.indexOf("Second power"));
     expect(html.match(/<section>/gu)).toHaveLength(2);
+  });
+
+  it("renders a stock-bounded add form for an available duck", () => {
+    const html = renderDuckDetailPage(duckFixture({ id: "duck's/item", stock: 2 }));
+
+    expect(html).toContain('action="/cart/items"');
+    expect(html).toContain('name="duckId" value="duck&#39;s/item"');
+    expect(html).toContain('name="quantity" value="1" min="1" max="2"');
+  });
+
+  it("does not render an add form for a sold-out duck", () => {
+    const html = renderDuckDetailPage(duckFixture({ stock: 0 }));
+
+    expect(html).not.toContain('action="/cart/items"');
   });
 
   it("escapes every catalog-provided string", () => {
@@ -83,5 +98,6 @@ describe("renderDuckNotFoundPage", () => {
     expect(html).toContain("<h1>Duck not found</h1>");
     expect(html).toContain("We could not find that duck.");
     expect(html).toContain('href="/"');
+    expect(html).toContain('href="/cart"');
   });
 });

@@ -24,9 +24,20 @@ function renderTextList(values: readonly string[]): string {
 }
 
 export function renderDuckDetailPage(duck: Duck): string {
+  const addForm =
+    duck.stock === 0
+      ? ""
+      : `<form method="post" action="/cart/items">
+          <input type="hidden" name="duckId" value="${escapeHtml(duck.id)}">
+          <label>Quantity
+            <input type="number" name="quantity" value="1" min="1" max="${String(duck.stock)}" step="1" required>
+          </label>
+          <button type="submit">Add to cart</button>
+        </form>`;
+
   return renderPage(
     duck.name,
-    `<p><a href="/">Back to catalog</a></p>
+    `<nav><a href="/">Back to catalog</a> | <a href="/cart">View cart</a></nav>
       <article>
         <h1>${escapeHtml(duck.name)}</h1>
         <p>${escapeHtml(duck.tagline)}</p>
@@ -42,6 +53,7 @@ export function renderDuckDetailPage(duck: Duck): string {
           <h2>Special powers</h2>
           ${renderTextList(duck.specialPowers)}
         </section>
+        ${addForm}
       </article>`,
   );
 }
@@ -51,6 +63,6 @@ export function renderDuckNotFoundPage(): string {
     "Duck not found",
     `<h1>Duck not found</h1>
       <p>We could not find that duck.</p>
-      <p><a href="/">Back to catalog</a></p>`,
+      <p><a href="/">Back to catalog</a> | <a href="/cart">View cart</a></p>`,
   );
 }
