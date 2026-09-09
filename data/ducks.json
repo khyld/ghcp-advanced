@@ -4,69 +4,109 @@
     "name": "Classic Yellow",
     "category": "Classic",
     "price": 9.99,
-    "tagline": "The timeless companion for every bath."
+    "tagline": "The timeless companion for every bath.",
+    "description": "Classic Yellow has perfected the art of calm floating and brings reassuring cheer to baths of every size.",
+    "personalityTraits": ["Dependable", "Cheerful", "Patient"],
+    "specialPowers": ["Perfect buoyancy", "Instant bath-time nostalgia"],
+    "stock": 8
   },
   {
     "id": "captain-quack",
     "name": "Captain Quack",
     "category": "Adventure",
     "price": 14.5,
-    "tagline": "Ready to navigate the stormiest soap bubbles."
+    "tagline": "Ready to navigate the stormiest soap bubbles.",
+    "description": "Captain Quack charts daring courses between shampoo bottles and never abandons a crewmate in rough water.",
+    "personalityTraits": ["Brave", "Decisive", "Loyal"],
+    "specialPowers": ["Bubble navigation", "Flawless sea-shanty timing"],
+    "stock": 2
   },
   {
     "id": "professor-paddles",
     "name": "Professor Paddles",
     "category": "Professions",
     "price": 12.99,
-    "tagline": "A thoughtful duck for your toughest debugging sessions."
+    "tagline": "A thoughtful duck for your toughest debugging sessions.",
+    "description": "Professor Paddles listens carefully to complex problems and offers a well-timed squeak when the solution becomes obvious.",
+    "personalityTraits": ["Curious", "Methodical", "Encouraging"],
+    "specialPowers": ["Rubber-duck debugging", "Unbreakable concentration"],
+    "stock": 5
   },
   {
     "id": "disco-duck",
     "name": "Disco Duck",
     "category": "Party",
     "price": 13.25,
-    "tagline": "Brings sparkling energy to the tub."
+    "tagline": "Brings sparkling energy to the tub.",
+    "description": "Disco Duck turns an ordinary soak into a celebration and always knows when the chorus is about to begin.",
+    "personalityTraits": ["Energetic", "Sociable", "Confident"],
+    "specialPowers": ["Underwater rhythm", "Dazzling dance moves"],
+    "stock": 0
   },
   {
     "id": "astro-quacker",
     "name": "Astro Quacker",
     "category": "Adventure",
     "price": 16,
-    "tagline": "One small splash for duckkind."
+    "tagline": "One small splash for duckkind.",
+    "description": "Astro Quacker trains for zero-gravity ponds while studying every mysterious corner of the bathroom universe.",
+    "personalityTraits": ["Adventurous", "Focused", "Imaginative"],
+    "specialPowers": ["Zero-gravity floating", "Cosmic bubble detection"],
+    "stock": 3
   },
   {
     "id": "chef-waddles",
     "name": "Chef Waddles",
     "category": "Professions",
     "price": 11.75,
-    "tagline": "Serves up a perfectly seasoned soak."
+    "tagline": "Serves up a perfectly seasoned soak.",
+    "description": "Chef Waddles believes every bath deserves careful preparation, balanced bubbles, and a tasteful finishing splash.",
+    "personalityTraits": ["Creative", "Precise", "Generous"],
+    "specialPowers": ["Perfect bubble recipes", "Five-star bath presentation"],
+    "stock": 6
   },
   {
     "id": "pirate-peep",
     "name": "Pirate Peep",
     "category": "Adventure",
     "price": 15.49,
-    "tagline": "Searching every bathtub for buried treasure."
+    "tagline": "Searching every bathtub for buried treasure.",
+    "description": "Pirate Peep explores beyond the faucet in search of legendary treasure and the perfect patch of foam.",
+    "personalityTraits": ["Bold", "Resourceful", "Mischievous"],
+    "specialPowers": ["Treasure sensing", "Fearless plug-hole crossings"],
+    "stock": 1
   },
   {
     "id": "tiny-tux",
     "name": "Tiny Tux",
     "category": "Party",
     "price": 12,
-    "tagline": "Always dressed for a formal float."
+    "tagline": "Always dressed for a formal float.",
+    "description": "Tiny Tux brings impeccable manners and understated charm to every formal bath-time occasion.",
+    "personalityTraits": ["Polite", "Elegant", "Punctual"],
+    "specialPowers": ["Wrinkle-proof formalwear", "Effortless event hosting"],
+    "stock": 4
   },
   {
     "id": "doctor-duck",
     "name": "Doctor Duck",
     "category": "Professions",
     "price": 13.99,
-    "tagline": "Prescribes warm water and plenty of bubbles."
+    "tagline": "Prescribes warm water and plenty of bubbles.",
+    "description": "Doctor Duck makes thoughtful rounds, checks the water temperature, and recommends rest after strenuous splashing.",
+    "personalityTraits": ["Caring", "Observant", "Calm"],
+    "specialPowers": ["Bubble diagnosis", "Comforting bedside squeak"],
+    "stock": 7
   },
   {
     "id": "retro-ruby",
     "name": "Retro Ruby",
     "category": "Classic",
     "price": 10.5,
-    "tagline": "A bold red twist on an old favorite."
+    "tagline": "A bold red twist on an old favorite.",
+    "description": "Retro Ruby combines vintage bath-time style with a bright personality that never fades into the background.",
+    "personalityTraits": ["Nostalgic", "Bold", "Warm"],
+    "specialPowers": ["Timeless style", "Colorful mood lifting"],
+    "stock": 9
   }
 ]

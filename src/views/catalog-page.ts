@@ -1,16 +1,6 @@
 import type { Duck } from "../catalog/duck.js";
 
-const htmlEscapes: Readonly<Record<string, string>> = {
-  "&": "&amp;",
-  "<": "&lt;",
-  ">": "&gt;",
-  '"': "&quot;",
-  "'": "&#39;",
-};
-
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/gu, (character) => htmlEscapes[character] ?? character);
-}
+import { escapeHtml, renderPage } from "./html.js";
 
 export function formatPrice(price: number): string {
   if (!Number.isFinite(price)) {
@@ -20,10 +10,14 @@ export function formatPrice(price: number): string {
   return `€${price.toFixed(2)}`;
 }
 
+export function duckDetailPath(id: string): string {
+  return `/ducks/${encodeURIComponent(id)}`;
+}
+
 function renderDuck(duck: Duck): string {
   return `<li>
         <article>
-          <h2>${escapeHtml(duck.name)}</h2>
+          <h2><a href="${escapeHtml(duckDetailPath(duck.id))}">${escapeHtml(duck.name)}</a></h2>
           <p><strong>Category:</strong> ${escapeHtml(duck.category)}</p>
           <p><strong>Price:</strong> ${formatPrice(duck.price)}</p>
           <p>${escapeHtml(duck.tagline)}</p>
@@ -39,18 +33,9 @@ export function renderCatalogPage(ducks: readonly Duck[]): string {
       ${ducks.map(renderDuck).join("\n      ")}
     </ul>`;
 
-  return `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>The Rubber Duck Emporium</title>
-  </head>
-  <body>
-    <main>
-      <h1>The Rubber Duck Emporium</h1>
-      ${catalogContent}
-    </main>
-  </body>
-</html>`;
+  return renderPage(
+    "The Rubber Duck Emporium",
+    `<h1>The Rubber Duck Emporium</h1>
+      ${catalogContent}`,
+  );
 }

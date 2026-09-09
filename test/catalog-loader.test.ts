@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { loadCatalog } from "../src/catalog/catalog-loader.js";
+import { duckFixture } from "./fixtures/ducks.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -28,20 +29,13 @@ describe("loadCatalog", () => {
   it("loads valid JSON and preserves order", async () => {
     const filePath = await catalogFile(
       JSON.stringify([
-        {
-          id: "first",
-          name: "First Duck",
-          category: "Classic",
-          price: 10,
-          tagline: "First in line.",
-        },
-        {
+        duckFixture({ id: "first", name: "First Duck", price: 10 }),
+        duckFixture({
           id: "second",
           name: "Second Duck",
           category: "Party",
           price: 11.5,
-          tagline: "Second in line.",
-        },
+        }),
       ]),
     );
 

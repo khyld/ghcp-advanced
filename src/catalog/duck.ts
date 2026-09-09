@@ -4,9 +4,11 @@ export interface Duck {
   category: string;
   price: number;
   tagline: string;
+  description: string;
+  personalityTraits: string[];
+  specialPowers: string[];
+  stock: number;
 }
-
-const requiredStringFields = ["id", "name", "category", "tagline"] as const;
 
 function describeEntry(index: number, field?: string): string {
   return field === undefined
@@ -18,22 +20,58 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function requiredString(
+  record: Record<string, unknown>,
+  field: string,
+  index: number,
+  singleLine = false,
+): string {
+  const value = record[field];
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new TypeError(`${describeEntry(index, field)} must be a non-empty string`);
+  }
+  if (singleLine && /[\r\n]/u.test(value)) {
+    throw new TypeError(`${describeEntry(index, field)} must be a single line`);
+  }
+  return value;
+}
+
+function requiredStringArray(
+  record: Record<string, unknown>,
+  field: string,
+  index: number,
+): string[] {
+  const value = record[field];
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new TypeError(`${describeEntry(index, field)} must be a non-empty array`);
+  }
+
+  return value.map((item, itemIndex) => {
+    const itemField = `${field}[${String(itemIndex)}]`;
+    if (typeof item !== "string" || item.trim().length === 0) {
+      throw new TypeError(
+        `${describeEntry(index, itemField)} must be a non-empty string`,
+      );
+    }
+    if (/[\r\n]/u.test(item)) {
+      throw new TypeError(`${describeEntry(index, itemField)} must be a single line`);
+    }
+    return item;
+  });
+}
+
 function parseDuck(value: unknown, index: number): Duck {
   if (!isRecord(value)) {
     throw new TypeError(`${describeEntry(index)} must be an object`);
   }
 
-  for (const field of requiredStringFields) {
-    const fieldValue = value[field];
-    if (typeof fieldValue !== "string" || fieldValue.trim().length === 0) {
-      throw new TypeError(`${describeEntry(index, field)} must be a non-empty string`);
-    }
-  }
-
-  const tagline = value.tagline as string;
-  if (/[\r\n]/u.test(tagline)) {
-    throw new TypeError(`${describeEntry(index, "tagline")} must be a single line`);
-  }
+  const id = requiredString(value, "id", index);
+  const name = requiredString(value, "name", index);
+  const category = requiredString(value, "category", index);
+  const tagline = requiredString(value, "tagline", index, true);
+  const description = requiredString(value, "description", index);
+  const personalityTraits = requiredStringArray(value, "personalityTraits", index);
+  const specialPowers = requiredStringArray(value, "specialPowers", index);
 
   const price = value.price;
   if (typeof price !== "number" || !Number.isFinite(price)) {
@@ -48,12 +86,24 @@ function parseDuck(value: unknown, index: number): Duck {
     );
   }
 
+  const stock = value.stock;
+  if (typeof stock !== "number" || !Number.isFinite(stock) || !Number.isInteger(stock)) {
+    throw new TypeError(`${describeEntry(index, "stock")} must be a finite integer`);
+  }
+  if (stock < 0) {
+    throw new RangeError(`${describeEntry(index, "stock")} must not be negative`);
+  }
+
   return {
-    id: value.id as string,
-    name: value.name as string,
-    category: value.category as string,
+    id,
+    name,
+    category,
     price,
     tagline,
+    description,
+    personalityTraits,
+    specialPowers,
+    stock,
   };
 }
 
