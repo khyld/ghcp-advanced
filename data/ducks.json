@@ -1,0 +1,72 @@
+[
+  {
+    "id": "classic-yellow",
+    "name": "Classic Yellow",
+    "category": "Classic",
+    "price": 9.99,
+    "tagline": "The timeless companion for every bath."
+  },
+  {
+    "id": "captain-quack",
+    "name": "Captain Quack",
+    "category": "Adventure",
+    "price": 14.5,
+    "tagline": "Ready to navigate the stormiest soap bubbles."
+  },
+  {
+    "id": "professor-paddles",
+    "name": "Professor Paddles",
+    "category": "Professions",
+    "price": 12.99,
+    "tagline": "A thoughtful duck for your toughest debugging sessions."
+  },
+  {
+    "id": "disco-duck",
+    "name": "Disco Duck",
+    "category": "Party",
+    "price": 13.25,
+    "tagline": "Brings sparkling energy to the tub."
+  },
+  {
+    "id": "astro-quacker",
+    "name": "Astro Quacker",
+    "category": "Adventure",
+    "price": 16,
+    "tagline": "One small splash for duckkind."
+  },
+  {
+    "id": "chef-waddles",
+    "name": "Chef Waddles",
+    "category": "Professions",
+    "price": 11.75,
+    "tagline": "Serves up a perfectly seasoned soak."
+  },
+  {
+    "id": "pirate-peep",
+    "name": "Pirate Peep",
+    "category": "Adventure",
+    "price": 15.49,
+    "tagline": "Searching every bathtub for buried treasure."
+  },
+  {
+    "id": "tiny-tux",
+    "name": "Tiny Tux",
+    "category": "Party",
+    "price": 12,
+    "tagline": "Always dressed for a formal float."
+  },
+  {
+    "id": "doctor-duck",
+    "name": "Doctor Duck",
+    "category": "Professions",
+    "price": 13.99,
+    "tagline": "Prescribes warm water and plenty of bubbles."
+  },
+  {
+    "id": "retro-ruby",
+    "name": "Retro Ruby",
+    "category": "Classic",
+    "price": 10.5,
+    "tagline": "A bold red twist on an old favorite."
+  }
+]

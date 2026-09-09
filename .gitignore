@@ -1,4 +1,6 @@
 duck-emporium/
+dist/
+node_modules/
 .github/.specify
 .github/.vscode
 .github/agents
