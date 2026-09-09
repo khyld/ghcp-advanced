@@ -1,4 +1,9 @@
 import type { Duck } from "../catalog/duck.js";
+import type {
+  CatalogFilterErrors,
+  CatalogFilterField,
+  CatalogFilterValues,
+} from "../catalog/catalog-filter.js";
 
 import { formatCents, priceToCents } from "../cart/cart-view.js";
 import { escapeHtml, renderPage } from "./html.js";
@@ -25,18 +30,94 @@ function renderDuck(duck: Duck): string {
       </li>`;
 }
 
-export function renderCatalogPage(ducks: readonly Duck[]): string {
+export interface CatalogPageModel {
+  readonly ducks: readonly Duck[];
+  readonly categories: readonly string[];
+  readonly filters: CatalogFilterValues;
+  readonly errors?: CatalogFilterErrors;
+  readonly filtersActive: boolean;
+}
+
+function renderError(
+  errors: CatalogFilterErrors | undefined,
+  field: CatalogFilterField,
+): string {
+  const error = errors?.[field];
+  return error === undefined ? "" : `<span role="alert">${escapeHtml(error)}</span>`;
+}
+
+function renderCategory(
+  category: string,
+  index: number,
+  selected: ReadonlySet<string>,
+): string {
+  const escapedCategory = escapeHtml(category);
+  const checked = selected.has(category) ? " checked" : "";
+  return `<label for="category-${String(index)}">
+          <input id="category-${String(index)}" type="checkbox" name="category" value="${escapedCategory}"${checked}>
+          ${escapedCategory}
+        </label>`;
+}
+
+function renderFilterForm(model: CatalogPageModel): string {
+  const selected = new Set(model.filters.categories);
+  const available = new Set(model.categories);
+  const unavailableSelections = model.filters.categories
+    .filter((category) => !available.has(category))
+    .map(
+      (category) =>
+        `<input type="hidden" name="category" value="${escapeHtml(category)}">`,
+    )
+    .join("\n        ");
+  const categoryControls =
+    model.categories.length === 0
+      ? "<p>No categories are currently available.</p>"
+      : model.categories
+          .map((category, index) => renderCategory(category, index, selected))
+          .join("\n        ");
+
+  return `<form method="get" action="/">
+        <label for="catalog-query">Search ducks</label>
+        <input id="catalog-query" name="q" value="${escapeHtml(model.filters.query)}">
+        ${renderError(model.errors, "query")}
+
+        <fieldset>
+          <legend>Categories</legend>
+          ${categoryControls}
+          ${unavailableSelections}
+          ${renderError(model.errors, "categories")}
+        </fieldset>
+
+        <label for="minimum-price">Minimum price (€)</label>
+        <input id="minimum-price" name="minPrice" inputmode="decimal" value="${escapeHtml(model.filters.minPrice)}">
+        ${renderError(model.errors, "minPrice")}
+
+        <label for="maximum-price">Maximum price (€)</label>
+        <input id="maximum-price" name="maxPrice" inputmode="decimal" value="${escapeHtml(model.filters.maxPrice)}">
+        ${renderError(model.errors, "maxPrice")}
+
+        <button type="submit">Search and filter</button>
+        <a href="/">Clear filters</a>
+      </form>`;
+}
+
+export function renderCatalogPage(model: CatalogPageModel): string {
   const catalogContent =
-    ducks.length === 0
-      ? "<p>No ducks are currently available.</p>"
+    model.errors !== undefined
+      ? ""
+      : model.ducks.length === 0
+        ? model.filtersActive
+          ? "<p>No duck matches your existential criteria.</p>"
+          : "<p>No ducks are currently available.</p>"
       : `<ul>
-      ${ducks.map(renderDuck).join("\n      ")}
+      ${model.ducks.map(renderDuck).join("\n      ")}
     </ul>`;
 
   return renderPage(
     "The Rubber Duck Emporium",
     `<p><a href="/cart">View cart</a></p>
       <h1>The Rubber Duck Emporium</h1>
+      ${renderFilterForm(model)}
       ${catalogContent}`,
   );
 }

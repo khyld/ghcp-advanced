@@ -57,6 +57,84 @@ describe("GET /", () => {
     expect(response.text).not.toContain("<ul>");
     expect(response.text).not.toContain("/ducks/");
   });
+
+  it.each([
+    ["name", "FIRST DUCK", "First Duck"],
+    ["tagline", "second in the catalog", "Second Duck"],
+    ["description", "other duck's private details", "Second Duck"],
+  ])(
+    "filters by a complete case-insensitive phrase in the %s",
+    async (_field, query, expected) => {
+      const response = await request(createApp(createTestRepository(ducks)))
+        .get("/")
+        .query({ q: query })
+        .expect(200);
+
+      expect(response.text).toContain(expected);
+      expect(response.text).toContain(`value="${query.replace("'", "&#39;")}"`);
+    },
+  );
+
+  it("composes repeated categories and inclusive price bounds in stable order", async () => {
+    const response = await request(createApp(createTestRepository(ducks)))
+      .get("/")
+      .query({
+        q: "catalog",
+        category: ["Adventure", "Classic"],
+        minPrice: "12.99",
+        maxPrice: "15.00",
+      })
+      .expect(200);
+
+    expect(response.text).toContain("First Duck");
+    expect(response.text).toContain("Second Duck");
+    expect(response.text.indexOf("First Duck")).toBeLessThan(
+      response.text.indexOf("Second Duck"),
+    );
+    expect(response.text).toContain('value="Classic" checked');
+    expect(response.text).toContain('value="Adventure" checked');
+    expect(response.text).toContain('name="minPrice" inputmode="decimal" value="12.99"');
+    expect(response.text).toContain('name="maxPrice" inputmode="decimal" value="15.00"');
+  });
+
+  it("renders the friendly filtered empty state for unknown categories", async () => {
+    const response = await request(createApp(createTestRepository(ducks)))
+      .get("/")
+      .query({ category: "Existential" })
+      .expect(200);
+
+    expect(response.text).toContain("No duck matches your existential criteria.");
+    expect(response.text).toContain(
+      '<input type="hidden" name="category" value="Existential">',
+    );
+    expect(response.text).not.toContain("<article>");
+  });
+
+  it("returns every scalar validation error with no duck results", async () => {
+    const response = await request(createApp(createTestRepository(ducks)))
+      .get("/?q=First&q=Second&minPrice=30&maxPrice=20")
+      .expect(400);
+
+    expect(response.text).toContain("Enter one search phrase.");
+    expect(response.text).toContain(
+      "Maximum price must be greater than or equal to minimum price.",
+    );
+    expect(response.text).not.toContain("<article>");
+    expect(response.text).not.toContain("First Duck");
+  });
+
+  it("escapes retained query values and does not create a cart session", async () => {
+    const response = await request(createApp(createTestRepository(ducks)))
+      .get("/")
+      .query({ q: '<script>"duck"</script>' })
+      .expect(200);
+
+    expect(response.text).toContain(
+      'value="&lt;script&gt;&quot;duck&quot;&lt;/script&gt;"',
+    );
+    expect(response.text).not.toContain("<script>");
+    expect(response.headers["set-cookie"]).toBeUndefined();
+  });
 });
 
 describe("GET /ducks/:id", () => {

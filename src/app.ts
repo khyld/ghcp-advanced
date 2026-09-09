@@ -23,6 +23,12 @@ import {
 } from "./cart/cart-session-store.js";
 import { buildCartView } from "./cart/cart-view.js";
 import { readSessionId, setSessionCookie } from "./cart/session-cookie.js";
+import {
+  filterCatalog,
+  hasActiveCatalogFilters,
+  listCatalogCategories,
+  parseCatalogFilters,
+} from "./catalog/catalog-filter.js";
 import { parseCheckoutInput } from "./checkout/checkout-input.js";
 import type { EmporiumRepository } from "./persistence/emporium-repository.js";
 import { renderCartPage } from "./views/cart-page.js";
@@ -72,8 +78,38 @@ export function createApp(
 
   app.use(express.urlencoded({ extended: false, limit: "4kb" }));
 
-  app.get("/", (_request, response) => {
-    response.status(200).type("html").send(renderCatalogPage(repository.listDucks()));
+  app.get("/", (request, response) => {
+    const catalog = repository.listDucks();
+    const categories = listCatalogCategories(catalog);
+    const parsed = parseCatalogFilters(request.query);
+
+    if (!parsed.ok) {
+      response
+        .status(400)
+        .type("html")
+        .send(
+          renderCatalogPage({
+            ducks: [],
+            categories,
+            filters: parsed.values,
+            errors: parsed.errors,
+            filtersActive: hasActiveCatalogFilters(parsed.values),
+          }),
+        );
+      return;
+    }
+
+    response
+      .status(200)
+      .type("html")
+      .send(
+        renderCatalogPage({
+          ducks: filterCatalog(catalog, parsed.criteria),
+          categories,
+          filters: parsed.values,
+          filtersActive: hasActiveCatalogFilters(parsed.values),
+        }),
+      );
   });
 
   app.get("/ducks/:id", (request, response) => {

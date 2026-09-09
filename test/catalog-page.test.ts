@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  type CatalogPageModel,
   duckDetailPath,
   formatPrice,
   renderCatalogPage,
@@ -8,6 +9,24 @@ import {
 import { duckFixture } from "./fixtures/ducks.js";
 
 const firstDuck = duckFixture();
+
+function catalogModel(
+  ducks: CatalogPageModel["ducks"],
+  overrides: Partial<CatalogPageModel> = {},
+): CatalogPageModel {
+  return {
+    ducks,
+    categories: ["Classic"],
+    filters: {
+      query: "",
+      categories: [],
+      minPrice: "",
+      maxPrice: "",
+    },
+    filtersActive: false,
+    ...overrides,
+  };
+}
 
 describe("formatPrice", () => {
   it.each([
@@ -33,7 +52,11 @@ describe("renderCatalogPage", () => {
       tagline: "Ready for rough bubbles.",
     });
 
-    const html = renderCatalogPage([firstDuck, secondDuck]);
+    const html = renderCatalogPage(
+      catalogModel([firstDuck, secondDuck], {
+        categories: ["Classic", "Adventure"],
+      }),
+    );
 
     expect(html).toContain("<ul>");
     expect(html.match(/<li>/gu)).toHaveLength(2);
@@ -53,7 +76,7 @@ describe("renderCatalogPage", () => {
   });
 
   it("renders an explicit empty state without a catalog list", () => {
-    const html = renderCatalogPage([]);
+    const html = renderCatalogPage(catalogModel([], { categories: [] }));
 
     expect(html).toContain("No ducks are currently available.");
     expect(html).not.toContain("<ul>");
@@ -61,15 +84,20 @@ describe("renderCatalogPage", () => {
   });
 
   it("escapes all catalog-provided text", () => {
-    const html = renderCatalogPage([
-      duckFixture({
-        id: "unsafe",
-        name: '<script>alert("duck")</script>',
-        category: "Rock & Roll",
-        price: 1,
-        tagline: "It's > everything",
-      }),
-    ]);
+    const html = renderCatalogPage(
+      catalogModel(
+        [
+          duckFixture({
+            id: "unsafe",
+            name: '<script>alert("duck")</script>',
+            category: "Rock & Roll",
+            price: 1,
+            tagline: "It's > everything",
+          }),
+        ],
+        { categories: ["Rock & Roll"] },
+      ),
+    );
 
     expect(html).not.toContain("<script>");
     expect(html).toContain("&lt;script&gt;alert(&quot;duck&quot;)&lt;/script&gt;");
@@ -77,23 +105,67 @@ describe("renderCatalogPage", () => {
     expect(html).toContain("It&#39;s &gt; everything");
   });
 
-  it("does not render out-of-scope controls or images", () => {
-    const html = renderCatalogPage([firstDuck]);
+  it("does not render out-of-scope images", () => {
+    const html = renderCatalogPage(catalogModel([firstDuck]));
 
-    expect(html).not.toMatch(/<(?:img|form|button|select|input)\b/iu);
+    expect(html).not.toMatch(/<img\b/iu);
   });
 
   it("links to the cart", () => {
-    expect(renderCatalogPage([firstDuck])).toContain('href="/cart"');
+    expect(renderCatalogPage(catalogModel([firstDuck]))).toContain('href="/cart"');
   });
 
   it("URL-encodes and HTML-escapes detail links", () => {
     const id = "captain's duck/one & two";
-    const html = renderCatalogPage([duckFixture({ id })]);
+    const html = renderCatalogPage(catalogModel([duckFixture({ id })]));
 
     expect(duckDetailPath(id)).toBe("/ducks/captain's%20duck%2Fone%20%26%20two");
     expect(html).toContain(
       'href="/ducks/captain&#39;s%20duck%2Fone%20%26%20two"',
     );
+  });
+
+  it("renders retained filters, categories, and safe inline errors", () => {
+    const html = renderCatalogPage(
+      catalogModel([], {
+        categories: ["Classic", 'Rock & "Roll"'],
+        filters: {
+          query: '<script>"duck"</script>',
+          categories: ['Rock & "Roll"'],
+          minPrice: "10.00",
+          maxPrice: "20",
+        },
+        errors: { minPrice: "Enter <minimum>." },
+        filtersActive: true,
+      }),
+    );
+
+    expect(html).toContain('form method="get" action="/"');
+    expect(html).toContain('name="q"');
+    expect(html).toContain('name="category"');
+    expect(html).toContain('name="minPrice"');
+    expect(html).toContain('name="maxPrice"');
+    expect(html).toContain('href="/">Clear filters</a>');
+    expect(html).toContain("&lt;script&gt;&quot;duck&quot;&lt;/script&gt;");
+    expect(html).toContain('value="Rock &amp; &quot;Roll&quot;" checked');
+    expect(html).toContain("Enter &lt;minimum&gt;.");
+    expect(html).not.toContain("<ul>");
+  });
+
+  it("renders the filtered empty state separately from an empty catalog", () => {
+    const html = renderCatalogPage(
+      catalogModel([], {
+        filters: {
+          query: "philosophical",
+          categories: [],
+          minPrice: "",
+          maxPrice: "",
+        },
+        filtersActive: true,
+      }),
+    );
+
+    expect(html).toContain("No duck matches your existential criteria.");
+    expect(html).not.toContain("No ducks are currently available.");
   });
 });
