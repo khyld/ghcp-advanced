@@ -37,6 +37,110 @@ const ducks = [
 ];
 
 describe("GET /", () => {
+  it("features one deterministic in-stock duck and links to its detail page", async () => {
+    const app = createApp(createTestRepository(ducks), {
+      now: () => new Date("1970-01-01T12:00:00.000Z"),
+    });
+
+    const firstResponse = await request(app).get("/").expect(200);
+    const secondResponse = await request(app).get("/").expect(200);
+
+    for (const response of [firstResponse, secondResponse]) {
+      const featuredSection = response.text.match(
+        /<section aria-labelledby="duck-of-the-day-heading">[\s\S]*?<\/section>/u,
+      )?.[0];
+
+      expect(featuredSection).toContain("Duck of the Day");
+      expect(featuredSection).toContain(
+        '<a href="/ducks/first">First Duck</a>',
+      );
+      expect(featuredSection).not.toContain(
+        '<a href="/ducks/sold-out">Sold Out Duck</a>',
+      );
+    }
+
+    await request(app).get("/ducks/first").expect(200);
+  });
+
+  it("rotates the featured duck at the next UTC day", async () => {
+    let now = new Date("1970-01-01T23:59:59.999Z");
+    const app = createApp(createTestRepository(ducks), { now: () => now });
+
+    const beforeMidnight = await request(app).get("/").expect(200);
+    now = new Date("1970-01-02T00:00:00.000Z");
+    const afterMidnight = await request(app).get("/").expect(200);
+
+    expect(beforeMidnight.text).toContain(
+      '<a href="/ducks/first">First Duck</a>',
+    );
+    expect(afterMidnight.text).toContain(
+      '<a href="/ducks/second">Second Duck</a>',
+    );
+  });
+
+  it("recalculates after the featured duck sells out", async () => {
+    const repository = createTestRepository([
+      duckFixture({ id: "last-one", name: "Last One", stock: 1 }),
+      duckFixture({ id: "still-here", name: "Still Here", stock: 2 }),
+    ]);
+    const app = createApp(repository, {
+      now: () => new Date("1970-01-01T12:00:00.000Z"),
+    });
+
+    expect((await request(app).get("/").expect(200)).text).toContain(
+      '<a href="/ducks/last-one">Last One</a>',
+    );
+    expect(
+      repository.checkout({
+        shipping: {
+          name: "Quincy Quacker",
+          email: "quincy@example.test",
+          address: "1 Pond Lane",
+        },
+        lines: [{ duckId: "last-one", quantity: 1 }],
+      }).ok,
+    ).toBe(true);
+    expect((await request(app).get("/").expect(200)).text).toContain(
+      '<a href="/ducks/still-here">Still Here</a>',
+    );
+  });
+
+  it("returns the empty-pond fallback for empty and all-sold-out catalogs", async () => {
+    for (const catalog of [
+      [],
+      [duckFixture({ id: "sold-out-only", stock: 0 })],
+    ]) {
+      const response = await request(createApp(createTestRepository(catalog)))
+        .get("/")
+        .expect(200);
+
+      expect(response.text).toContain(
+        "The pond is empty today, come back tomorrow.",
+      );
+    }
+  });
+
+  it("escapes the featured duck name and encodes its detail link", async () => {
+    const response = await request(
+      createApp(
+        createTestRepository([
+          duckFixture({
+            id: "duck/with space",
+            name: "<script>unsafe</script>",
+          }),
+        ]),
+        { now: () => new Date("1970-01-01T00:00:00.000Z") },
+      ),
+    )
+      .get("/")
+      .expect(200);
+
+    expect(response.text).toContain(
+      '<a href="/ducks/duck%2Fwith%20space">&lt;script&gt;unsafe&lt;/script&gt;</a>',
+    );
+    expect(response.text).not.toContain("<script>unsafe</script>");
+  });
+
   it("returns the complete linked HTML catalog in order", async () => {
     const response = await request(createApp(createTestRepository(ducks)))
       .get("/")

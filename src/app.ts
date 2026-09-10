@@ -32,6 +32,7 @@ import {
   listCatalogCategories,
   parseCatalogFilters,
 } from "./catalog/catalog-filter.js";
+import { selectDuckOfTheDay } from "./catalog/duck-of-the-day.js";
 import { parseCheckoutInput } from "./checkout/checkout-input.js";
 import type { EmporiumRepository } from "./persistence/emporium-repository.js";
 import { renderCartPage } from "./views/cart-page.js";
@@ -169,6 +170,7 @@ export function createApp(
         .send(
           renderCatalogPage({
             ducks: [],
+            duckOfTheDay: undefined,
             categories,
             filters: parsed.values,
             errors: parsed.errors,
@@ -184,6 +186,7 @@ export function createApp(
       .send(
         renderCatalogPage({
           ducks: filterCatalog(catalog, parsed.criteria),
+          duckOfTheDay: selectDuckOfTheDay(catalog, now()),
           categories,
           filters: parsed.values,
           filtersActive: hasActiveCatalogFilters(parsed.values),

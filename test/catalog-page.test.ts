@@ -16,6 +16,7 @@ function catalogModel(
 ): CatalogPageModel {
   return {
     ducks,
+    duckOfTheDay: undefined,
     categories: ["Classic"],
     filters: {
       query: "",
@@ -43,6 +44,31 @@ describe("formatPrice", () => {
 });
 
 describe("renderCatalogPage", () => {
+  it("renders the featured duck as an escaped, encoded detail link", () => {
+    const featuredDuck = duckFixture({
+      id: "captain's duck/one",
+      name: "<Captain & Quack>",
+    });
+    const html = renderCatalogPage(
+      catalogModel([firstDuck], { duckOfTheDay: featuredDuck }),
+    );
+
+    expect(html).toContain(
+      '<section aria-labelledby="duck-of-the-day-heading">',
+    );
+    expect(html).toContain('<h2 id="duck-of-the-day-heading">Duck of the Day</h2>');
+    expect(html).toContain(
+      '<a href="/ducks/captain&#39;s%20duck%2Fone">&lt;Captain &amp; Quack&gt;</a>',
+    );
+    expect(html).not.toContain("<Captain");
+  });
+
+  it("renders the empty-pond fallback when no duck is eligible", () => {
+    const html = renderCatalogPage(catalogModel([firstDuck]));
+
+    expect(html).toContain("The pond is empty today, come back tomorrow.");
+  });
+
   it("renders all required details once and in input order", () => {
     const secondDuck = duckFixture({
       id: "captain-quack",

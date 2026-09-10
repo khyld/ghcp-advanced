@@ -32,10 +32,23 @@ function renderDuck(duck: Duck): string {
 
 export interface CatalogPageModel {
   readonly ducks: readonly Duck[];
+  readonly duckOfTheDay: Duck | undefined;
   readonly categories: readonly string[];
   readonly filters: CatalogFilterValues;
   readonly errors?: CatalogFilterErrors;
   readonly filtersActive: boolean;
+}
+
+function renderDuckOfTheDay(duck: Duck | undefined): string {
+  const content =
+    duck === undefined
+      ? "<p>The pond is empty today, come back tomorrow.</p>"
+      : `<p><a href="${escapeHtml(duckDetailPath(duck.id))}">${escapeHtml(duck.name)}</a></p>`;
+
+  return `<section aria-labelledby="duck-of-the-day-heading">
+        <h2 id="duck-of-the-day-heading">Duck of the Day</h2>
+        ${content}
+      </section>`;
 }
 
 function renderError(
@@ -117,6 +130,7 @@ export function renderCatalogPage(model: CatalogPageModel): string {
     "The Rubber Duck Emporium",
     `<p><a href="/cart">View cart</a></p>
       <h1>The Rubber Duck Emporium</h1>
+      ${renderDuckOfTheDay(model.duckOfTheDay)}
       ${renderFilterForm(model)}
       ${catalogContent}`,
   );
