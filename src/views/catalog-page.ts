@@ -128,7 +128,7 @@ export function renderCatalogPage(model: CatalogPageModel): string {
 
   return renderPage(
     "The Rubber Duck Emporium",
-    `<p><a href="/cart">View cart</a></p>
+    `<p><a href="/cart">View cart</a> | <a href="/quiz">Which duck are you?</a></p>
       <h1>The Rubber Duck Emporium</h1>
       ${renderDuckOfTheDay(model.duckOfTheDay)}
       ${renderFilterForm(model)}

@@ -36,6 +36,15 @@ const ducks = [
   }),
 ];
 
+const validQuizAnswers = {
+  weekend: "familiar",
+  problem: "proven",
+  friends: "anchor",
+  soundtrack: "favorites",
+  desk: "keepsake",
+  motto: "steady",
+};
+
 describe("GET /", () => {
   it("features one deterministic in-stock duck and links to its detail page", async () => {
     const app = createApp(createTestRepository(ducks), {
@@ -287,6 +296,142 @@ describe("GET /ducks/:id", () => {
       expect(response.text).not.toContain(id);
     },
   );
+});
+
+describe("quiz routes", () => {
+  it("links from the home page and serves the complete quiz without a session", async () => {
+    const app = createApp(createTestRepository(ducks));
+    const home = await request(app).get("/").expect(200);
+    const quiz = await request(app).get("/quiz").expect(200);
+
+    expect(home.text).toContain('<a href="/quiz">Which duck are you?</a>');
+    expect(quiz.headers["content-type"]).toMatch(/^text\/html; charset=utf-8$/u);
+    expect(quiz.text).toContain("<h1>Which duck are you?</h1>");
+    expect(quiz.text.match(/<fieldset/gmu)).toHaveLength(6);
+    expect(quiz.headers["set-cookie"]).toBeUndefined();
+  });
+
+  it("returns a deterministic recommendation with a working detail link", async () => {
+    const app = createApp(createTestRepository(ducks));
+    const first = await request(app)
+      .post("/quiz")
+      .type("form")
+      .send(validQuizAnswers)
+      .expect(200);
+    const second = await request(app)
+      .post("/quiz")
+      .type("form")
+      .send({
+        motto: "steady",
+        desk: "keepsake",
+        soundtrack: "favorites",
+        friends: "anchor",
+        problem: "proven",
+        weekend: "familiar",
+      })
+      .expect(200);
+
+    for (const response of [first, second]) {
+      expect(response.text).toContain("Your duck is");
+      expect(response.text).toContain('<a href="/ducks/first">First Duck</a>');
+      expect(response.text).toContain("<strong>Category:</strong> Classic");
+      expect(response.text).toContain(
+        "You are a steady splash of timeless charm.",
+      );
+      expect(response.headers["set-cookie"]).toBeUndefined();
+    }
+    await request(app).get("/ducks/first").expect(200);
+  });
+
+  it("returns field errors and preserves valid answers without a result", async () => {
+    const response = await request(createApp(createTestRepository(ducks)))
+      .post("/quiz")
+      .type("form")
+      .send({
+        problem: "invented",
+        friends: "anchor",
+        soundtrack: "favorites",
+        desk: "keepsake",
+        motto: "steady",
+      })
+      .expect(400);
+
+    expect(response.text).toContain(
+      '<span id="weekend-error" role="alert">Choose one answer.</span>',
+    );
+    expect(response.text).toContain(
+      '<span id="problem-error" role="alert">Choose a valid answer.</span>',
+    );
+    expect(response.text).toContain('name="friends" value="anchor" checked');
+    expect(response.text).not.toContain("Your duck match");
+    expect(response.headers["set-cookie"]).toBeUndefined();
+  });
+
+  it("rejects repeated and unexpected fields", async () => {
+    const repeated = await request(createApp(createTestRepository(ducks)))
+      .post("/quiz")
+      .set("Content-Type", "application/x-www-form-urlencoded")
+      .send(
+        "weekend=familiar&weekend=explore&problem=proven&friends=anchor&soundtrack=favorites&desk=keepsake&motto=steady",
+      )
+      .expect(400);
+    const unexpected = await request(createApp(createTestRepository(ducks)))
+      .post("/quiz")
+      .type("form")
+      .send({ ...validQuizAnswers, score: "999" })
+      .expect(400);
+
+    expect(repeated.text).toContain("Choose exactly one valid answer.");
+    expect(unexpected.text).toContain(
+      "Quiz submission contains unexpected fields.",
+    );
+    expect(repeated.text).not.toContain("Your duck match");
+    expect(unexpected.text).not.toContain("Your duck match");
+  });
+
+  it("uses the friendly fallback when no scored duck is available", async () => {
+    for (const catalog of [
+      [],
+      [duckFixture({ category: "Classic", stock: 0 })],
+      [duckFixture({ category: "Seasonal", stock: 2 })],
+    ]) {
+      const response = await request(createApp(createTestRepository(catalog)))
+        .post("/quiz")
+        .type("form")
+        .send(validQuizAnswers)
+        .expect(200);
+
+      expect(response.text).toContain(
+        "No ducks are ready to meet their match today. Please try again tomorrow.",
+      );
+      expect(response.text).not.toContain("/ducks/");
+    }
+  });
+
+  it("escapes recommendation content and does not mutate the catalog", async () => {
+    const catalog = [
+      duckFixture({
+        id: "duck/with space & style",
+        name: "<script>unsafe</script>",
+        category: "Classic",
+        stock: 2,
+      }),
+    ];
+    const repository = createTestRepository(catalog);
+    const before = repository.listDucks();
+    const response = await request(createApp(repository))
+      .post("/quiz")
+      .type("form")
+      .send(validQuizAnswers)
+      .expect(200);
+
+    expect(response.text).toContain(
+      '<a href="/ducks/duck%2Fwith%20space%20%26%20style">&lt;script&gt;unsafe&lt;/script&gt;</a>',
+    );
+    expect(response.text).not.toContain("<script>");
+    expect(response.headers["set-cookie"]).toBeUndefined();
+    expect(repository.listDucks()).toEqual(before);
+  });
 });
 
 describe("cart routes", () => {

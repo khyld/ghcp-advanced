@@ -138,7 +138,10 @@ describe("renderCatalogPage", () => {
   });
 
   it("links to the cart", () => {
-    expect(renderCatalogPage(catalogModel([firstDuck]))).toContain('href="/cart"');
+    const html = renderCatalogPage(catalogModel([firstDuck]));
+
+    expect(html).toContain('href="/cart"');
+    expect(html).toContain('<a href="/quiz">Which duck are you?</a>');
   });
 
   it("URL-encodes and HTML-escapes detail links", () => {

@@ -35,6 +35,8 @@ import {
 import { selectDuckOfTheDay } from "./catalog/duck-of-the-day.js";
 import { parseCheckoutInput } from "./checkout/checkout-input.js";
 import type { EmporiumRepository } from "./persistence/emporium-repository.js";
+import { parseQuizInput } from "./quiz/quiz-input.js";
+import { recommendDuck } from "./quiz/quiz-recommendation.js";
 import { renderCartPage } from "./views/cart-page.js";
 import { duckDetailPath, renderCatalogPage } from "./views/catalog-page.js";
 import { renderCheckoutPage } from "./views/checkout-page.js";
@@ -44,6 +46,10 @@ import {
 } from "./views/duck-detail-page.js";
 import { renderPage } from "./views/html.js";
 import { renderOrderConfirmationPage } from "./views/order-confirmation-page.js";
+import {
+  renderQuizPage,
+  renderQuizResultPage,
+} from "./views/quiz-page.js";
 
 export interface AppOptions {
   readonly sessionStore?: CartSessionStore;
@@ -204,6 +210,27 @@ export function createApp(
     }
 
     response.status(200).type("html").send(renderDuckDetailPage(duck));
+  });
+
+  app.get("/quiz", (_request, response) => {
+    response.status(200).type("html").send(renderQuizPage());
+  });
+
+  app.post("/quiz", (request, response) => {
+    const input = parseQuizInput(request.body);
+    if (!input.ok) {
+      response
+        .status(400)
+        .type("html")
+        .send(renderQuizPage({ values: input.values, errors: input.errors }));
+      return;
+    }
+
+    const recommendation = recommendDuck(input.answers, repository.listDucks());
+    response
+      .status(200)
+      .type("html")
+      .send(renderQuizResultPage(recommendation));
   });
 
   app.get("/cart", (request, response) => {
